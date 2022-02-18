@@ -1,0 +1,17 @@
+{
+    "plugins": [
+          "p5js"
+    ],
+    "env": {
+        "browser": true,
+        "es2021": true,
+        "p5js/p5": true
+    },
+    "extends": [
+        "semistandard",
+        "plugin:p5js/p5"
+    ],
+    "rules": {
+        "prefer-const": "off"
+    }
+}

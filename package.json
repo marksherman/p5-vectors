@@ -1,0 +1,24 @@
+{
+  "name": "p5js-vscode-template",
+  "version": "1.0.0",
+  "description": "Template for creating p5.js assignments to run in Visual Studio Code with dev containers for linting",
+  "main": "index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ec-idds/p5js-vscode-template.git"
+  },
+  "author": "Mark Sherman <profmarksherman@gmail.com>",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/ec-idds/codio-p5js-vscode-template/issues"
+  },
+  "homepage": "https://github.com/ec-idds/codio-p5js-vscode-template#readme",
+  "devDependencies": {
+    "eslint": "^7.32.0",
+    "eslint-config-semistandard": "^16.0.0",
+    "eslint-plugin-p5js": "^0.3.2"
+  }
+}
