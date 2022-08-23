@@ -2,6 +2,9 @@ let imageWidth = 640;
 let imageHeight = 480;
 let globalColor = 255;
 let frame = 0;
+let scroll = 0;
+
+let drawTrench = trench();
 
 function setup () {
   createCanvas(imageWidth, imageHeight);
@@ -11,14 +14,16 @@ function setup () {
 function draw () {
   frame = floor(millis() / 50);
   background(0);
+  // trench();
+  drawTrench(scroll);
   translate(width / 2, height / 2);
   ship();
-  translate(width / -4, height / -4);
+  translate(width * -0.4, height * -0.4);
   saucer(frame);
-  translate(0, height / 4);
+  translate(width * 0.25, 0);
   scale(2);
-  saucer(frame + 15);
-  translate(0, height / 8);
+  saucer(frame);
+  translate(width * 0.25, 0);
   scale(2);
   saucer(frame);
 }
@@ -75,4 +80,74 @@ function saucer (frame) {
 
     stroke(globalColor);
   }
+}
+
+function trench () {
+  let groundWidth = 600;
+  let trenchWidth = 50;
+  let trenchDepth = 50;
+  let trenchBevel = 15;
+  // single horizontal element of a trench
+  let trenchRib = (dx = 0, dy = 0) => {
+    line(-groundWidth, 0, -trenchWidth, 0);
+    line(-trenchWidth, 0, -trenchWidth + trenchBevel, trenchDepth);
+    line(-trenchWidth + trenchBevel, trenchDepth, trenchWidth - trenchBevel, trenchDepth);
+    line(trenchWidth - trenchBevel, trenchDepth, trenchWidth, 0);
+    line(trenchWidth, 0, groundWidth, 0);
+  };
+
+  let trenchSegment = (count, dx, dy) => {
+    for (let i = 0; i < count; i++) {
+      // connecting lines from the previous rib
+      line(-trenchWidth, 0, -trenchWidth + dx, 0 + dy);
+      line(-trenchWidth + trenchBevel, trenchDepth, -trenchWidth + trenchBevel + dx, trenchDepth + dy);
+      line(trenchWidth - trenchBevel, trenchDepth, trenchWidth - trenchBevel + dx, trenchDepth + dy)
+      line(trenchWidth, 0, trenchWidth + dx, 0 + dy);
+      // now move to the current rib
+      translate(dx, dy);
+      trenchRib();
+    }
+  };
+
+  let trench1 = () => {
+    push();
+    resetMatrix();
+    translate(width / 2.5, height);
+    let yoff = -8;
+    trenchSegment(5, 12, yoff);
+    trenchSegment(3, 9, yoff);
+    trenchSegment(3, 4, yoff);
+    trenchSegment(2, 0, yoff);
+    trenchSegment(2, -5, yoff);
+    trenchSegment(2, -7, yoff);
+    trenchSegment(2, -10, yoff);
+    trenchSegment(2, -13, yoff);
+    trenchSegment(2, -16, yoff);
+    trenchSegment(2, -15, yoff);
+    trenchSegment(2, -10, yoff);
+    trenchSegment(3, 0, yoff);
+    trenchSegment(3, 10, yoff);
+    trenchSegment(2, 12, yoff);
+    pop();
+  };
+
+  let sinTrench = (offset) => {
+    push();
+    resetMatrix();
+    translate(width / 2, height);
+    let yoff = -8;
+    let ribCount = (height * 0.75) / abs(yoff);
+    for (let i = 0; i < ribCount; i++) {
+      let slide = sin((i + offset) / 5) * 20;
+      trenchSegment(1, slide, yoff);
+    }
+    pop();
+  };
+
+  return sinTrench;
+  // return trench1;
+}
+
+function mouseWheel (event) {
+  scroll += event.deltaY / 4;
 }
