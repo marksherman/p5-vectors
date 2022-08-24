@@ -4,10 +4,14 @@ let globalColor = 255;
 let frame = 0;
 let scroll = 0;
 
-let drawTrench = trench();
+let drawTrench;
+let lasers;
 
 function setup () {
   createCanvas(imageWidth, imageHeight);
+  globalColor = color(255, 255);
+  drawTrench = trench();
+  lasers = new Lasers();
   stroke(globalColor);
 }
 
@@ -26,6 +30,7 @@ function draw () {
   translate(width * 0.25, 0);
   scale(2);
   saucer(frame);
+  lasers.draw();
 }
 
 function ship () {
@@ -82,6 +87,9 @@ function saucer (frame) {
   }
 }
 
+// This is a class function so multiple functions can share local variables.
+// It should be called ONCE. It returns a function to draw the desired trench.
+// The function it returns may be called repeatedly in draw().
 function trench () {
   let groundWidth = 600;
   let trenchWidth = 50;
@@ -101,7 +109,7 @@ function trench () {
       // connecting lines from the previous rib
       line(-trenchWidth, 0, -trenchWidth + dx, 0 + dy);
       line(-trenchWidth + trenchBevel, trenchDepth, -trenchWidth + trenchBevel + dx, trenchDepth + dy);
-      line(trenchWidth - trenchBevel, trenchDepth, trenchWidth - trenchBevel + dx, trenchDepth + dy)
+      line(trenchWidth - trenchBevel, trenchDepth, trenchWidth - trenchBevel + dx, trenchDepth + dy);
       line(trenchWidth, 0, trenchWidth + dx, 0 + dy);
       // now move to the current rib
       translate(dx, dy);
@@ -109,6 +117,7 @@ function trench () {
     }
   };
 
+  // hand-crafted trench shape
   let trench1 = () => {
     push();
     resetMatrix();
@@ -131,6 +140,7 @@ function trench () {
     pop();
   };
 
+  // dynamic trench that's a sine wave and can be scrolled
   let sinTrench = (offset) => {
     push();
     resetMatrix();
@@ -148,6 +158,55 @@ function trench () {
   // return trench1;
 }
 
+class Lasers {
+  constructor () {
+    this.nw = createVector(0, 0);
+    this.target = createVector(width / 2, height / 2);
+    this.distance = p5.Vector.dist(this.nw, this.target);
+    this.isShooting = false;
+    this.travelFrames = 30;
+    this.beamLength = createVector(0, 60);
+    this.beamLength.setHeading(this.target.heading());
+  }
+
+  shoot () {
+    if (this.isShooting === false) {
+      this.isShooting = true;
+      this.progress = 0;
+    }
+  }
+
+  draw () {
+    if (this.isShooting !== true) { return; }
+
+    push();
+    resetMatrix();
+
+    stroke(color(102, 255, 102));
+
+    let beam = createVector(0, this.distance * this.progress);
+    beam.setHeading(this.target.heading());
+    // to make the beam get smaller as it travels use curBeamLength
+    let curBeamLength = this.beamLength.copy();
+    curBeamLength.setMag(this.beamLength.mag() * (1 - Math.log(this.progress + 1)));
+    let end = p5.Vector.add(beam, curBeamLength);
+    line(beam.x, beam.y, end.x, end.y);
+    print(this.progress);
+    this.progress += 1 / this.travelFrames;
+    if (this.progress > 0.95) {
+      this.isShooting = false;
+    }
+    stroke(globalColor);
+    pop();
+  }
+}
+
+// used to scroll the trench background when using sinTrench
 function mouseWheel (event) {
   scroll += event.deltaY / 4;
+}
+
+// used to fire lasers
+function mousePressed (event) {
+  lasers.shoot();
 }
