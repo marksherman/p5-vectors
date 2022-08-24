@@ -13,6 +13,7 @@ function setup () {
   drawTrench = trench();
   lasers = new Lasers();
   stroke(globalColor);
+  background(0);
 }
 
 function draw () {
