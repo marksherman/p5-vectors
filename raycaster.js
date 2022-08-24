@@ -14,12 +14,14 @@ function setup () {
   mapTracer = new MapTracer();
   stroke(globalColor);
   background(0);
+  // noLoop();
 }
 
 function draw () {
   frame = floor(millis() / 50);
   background(0);
-  mapTracer.draw();
+  mapTracer.draw2d();
+  mapTracer.drawRays();
 }
 
 class MapTracer {
@@ -37,9 +39,13 @@ class MapTracer {
       [1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
       [1, 0, 0, 0, 0, 0, 1, 0, 0, 1],
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]];
-    this.posX = 4;
-    this.posY = 4;
+    this.mapWidth = 100;
+    this.mapHeight = 100;
+    this.gridSize = 10;
+    this.posX = 40;
+    this.posY = 40;
     this.heading = 0;
+    print('position:', this.posX, this.posY, this.heading);
   }
 
   turn (direction) {
@@ -50,6 +56,9 @@ class MapTracer {
       this.heading += QUARTER_PI / 2;
     }
     this.heading %= TWO_PI;
+    if (this.heading < 0) {
+      this.heading = TWO_PI - abs(this.heading);
+    }
     print('position:', this.posX, this.posY, this.heading);
   }
 
@@ -58,14 +67,14 @@ class MapTracer {
     let toy = round(1.1 * sin(this.heading));
     print('cos', cos(this.heading), 'sin', sin(this.heading));
     print('moving by', tox, toy, this.heading);
-    if (this.posX + tox > 0 && this.posY > 0 && this.posX < 10 && this.posY < 10) {
+    if (this.posX + tox > 0 && this.posY > 0 && this.posX < 100 && this.posY < 100) {
       this.posX += tox;
       this.posY += toy;
     } else {
       print('out of bounds');
     }
     print('position:', this.posX, this.posY, this.heading);
-    this.printMap();
+    // redraw();
   }
 
   printMap () {
@@ -110,6 +119,138 @@ class MapTracer {
       dists.push(d);
     }
     return dists;
+  }
+
+  drawRays () {
+    push();
+    noFill();
+    stroke(globalColor);
+    strokeWeight(0.5);
+    stroke('green');
+    translate(1, 1);
+    scale(4);
+
+    let rayAngle = this.heading;
+    let rayY;
+    let rayX;
+    let offX; // offsets to go multiple grid squares quickly
+    let offY;
+    // **********************************************************
+    // * find horizontal line intercept                         *
+    // **********************************************************
+    let arcTan = -1 / tan(rayAngle);
+    let depth = 0; // when this hits 10 the loop below stops. Prevents infinite loop.
+    // looking up
+    // TODO there's a bug in here when the player is sitting exactly on a horizontal line
+    if (rayAngle > PI) {
+      rayY = floor(this.posY / this.gridSize) * this.gridSize;
+      rayX = (this.posY - rayY) * arcTan + this.posX;
+      offY = -this.gridSize;
+      offX = -offY * arcTan;
+    }
+    // looking down
+    if (rayAngle < PI) {
+      rayY = floor(this.posY / this.gridSize) * this.gridSize + this.gridSize;
+      rayX = (this.posY - rayY) * arcTan + this.posX;
+      offY = this.gridSize;
+      offX = -offY * arcTan;
+    }
+    // looking left or right won't ever hit a horizontal line
+    // if ((rayAngle < 0.0000000000001 && rayAngle > -0.0000000000001) ||
+    //     (rayAngle < PI + 0.0000000000001 && rayAngle > PI - 0.0000000000001) ||
+    //     (rayAngle < TWO_PI + 0.0000000000001 && rayAngle > TWO_PI - 0.0000000000001)) {
+    //   rayX = this.posX;
+    //   rayY = this.posY;
+    //   depth = 10; // don't do the loop
+    // }
+    // now we loop to find the nearest wall, one offset click at a time
+    while (depth < 8) {
+      const gridX = floor(rayX / this.gridSize);
+      const gridY = floor(rayY / this.gridSize);
+      // if our coordinates are on the map, check the map and end the loop if wall found
+      if (gridX < 10 && gridY < 10 && gridX >= 0 && gridY >= 0 && 
+          this.map[gridY][gridX] === 1) {
+        depth = 10; // hit a wall; stop
+      } else {
+        rayX += offX;
+        rayY += offY;
+        depth += 1;
+      }
+    }
+    if (rayY < this.posY) { rayY += this.gridSize; }
+    strokeWeight(4);
+    line(this.posX, this.posY, rayX, rayY);
+
+    // **********************************************************
+    // * find vertical line intercept                         *
+    // **********************************************************
+    let nTan = -1 * tan(rayAngle);
+    depth = 0; // when this hits 10 the loop below stops. Prevents infinite loop.
+    // looking left
+    if (rayAngle > HALF_PI && rayAngle < 3 * HALF_PI) {
+      rayX = floor(this.posX / this.gridSize) * this.gridSize;
+      rayY = (this.posX - rayX) * nTan + this.posY;
+      offX = -this.gridSize;
+      offY = -offX * nTan;
+    }
+    // looking right
+    if (rayAngle < HALF_PI || rayAngle > 3 * HALF_PI) {
+      rayX = floor(this.posX / this.gridSize) * this.gridSize + this.gridSize;
+      rayY = (this.posX - rayX) * nTan + this.posY;
+      offX = this.gridSize;
+      offY = -offX * nTan;
+    }
+    // looking up or down won't ever hit a horizontal line
+    // if ((rayAngle < TWO_PI + 0.0000000000001 && rayAngle > TWO_PI - 0.0000000000001) ||
+    //     (rayAngle < 3 * TWO_PI + 0.0000000000001 && rayAngle > 3 * TWO_PI - 0.0000000000001)) {
+    //   rayX = this.posX;
+    //   rayY = this.posY;
+    //   depth = 10; // don't do the loop
+    // }
+    // now we loop to find the nearest wall, one offset click at a time
+    while (depth < 8) {
+      const gridX = floor(rayX / this.gridSize);
+      const gridY = floor(rayY / this.gridSize);
+      // if our coordinates are on the map, check the map and end the loop if wall found
+      if (gridX < 10 && gridY < 10 && gridX >= 0 && gridY >= 0 && 
+          this.map[gridY][gridX] === 1) {
+        depth = 10; // hit a wall; stop
+      } else {
+        rayX += offX;
+        rayY += offY;
+        depth += 1;
+      }
+    }
+    if (rayX < this.posX) { rayX += this.gridSize; }
+    strokeWeight(0.5);
+    stroke('purple');
+    line(this.posX, this.posY, rayX, rayY);
+    pop();
+  }
+
+  draw2d () {
+    push();
+    noFill();
+    stroke(globalColor);
+    strokeWeight(0.5);
+    translate(1, 1);
+    scale(4);
+    let s = this.gridSize;
+    for (let row = 0; row < 10; row++) {
+      for (let col = 0; col < 10; col++) {
+        if (this.map[row][col] === 1) { fill(200); }
+        else { noFill(); }
+        rect(col * s, row * s, s);
+      }
+    }
+    fill('yellow');
+    noStroke();
+    rect(this.posX - 2, this.posY - 2, 4);
+    let headingLine = createVector(10, 0);
+    headingLine.setHeading(this.heading);
+    stroke('red');
+    line(this.posX, this.posY, this.posX + headingLine.x, this.posY + headingLine.y);
+    pop();
   }
 
   draw () {
