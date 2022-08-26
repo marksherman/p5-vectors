@@ -3,7 +3,7 @@
  */
 
 let imageWidth = 640;
-let imageHeight = 480;
+let imageHeight = 480 * 2;
 let globalColor = 255;
 let frame = 0;
 let mapTracer;
@@ -20,9 +20,10 @@ function setup () {
 function draw () {
   frame = millis();
   background(0);
+  mapTracer.draw();
   mapTracer.draw2d();
   // mapTracer.drawRay(mapTracer.heading);
-  mapTracer.drawRays(2, 30);
+  // mapTracer.drawRays(2, 30);
 }
 
 class MapTracer {
@@ -33,7 +34,7 @@ class MapTracer {
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-      [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 0, 0, 0, 0, 0, 0, 1],
       [1, 0, 0, 0, 'S', 0, 0, 0, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 1, 1],
@@ -94,36 +95,6 @@ class MapTracer {
       }
       print(rp);
     }
-  }
-
-  findHeights () {
-    let minAngle = -QUARTER_PI;
-    let maxAngle = QUARTER_PI;
-    let sweep = maxAngle - minAngle;
-    let rayWidth = sweep / this.rayCount;
-    let dists = [];
-    for (let ray = 0; ray < this.rayCount; ray++) {
-      let angle = minAngle + rayWidth * ray;
-      angle += this.heading;
-      // now we need to scan down the ray to find a wall
-      let found = false;
-      let d = 0;
-      while (d < 999 && !found) {
-        let x = floor(d * cos(angle));
-        let y = floor(d * sin(angle));
-        if (this.posY + y >= this.map.length || this.posX + x >= this.map[this.posY].length) {
-          found = true;
-          d = 0;
-        } else if (this.map[this.posY + y][this.posX + x] === 1) {
-          found = true;
-        } else {
-          d += 0.1;
-        }
-      }
-      // found for this ray, add to the results array
-      dists.push(d);
-    }
-    return dists;
   }
 
   drawRay (rayAngle, draw = true) {
@@ -233,11 +204,11 @@ class MapTracer {
     if (vRayD < hRayD) {
       rayX = vRayX;
       rayY = vRayY;
-      distance = vRayD;
+      distance = [vRayD, 0];
     } else {
       rayX = hRayX;
       rayY = hRayY;
-      distance = hRayD;
+      distance = [hRayD, 1];
     }
     if (draw) {
       line(this.posX, this.posY, rayX, rayY);
@@ -252,10 +223,12 @@ class MapTracer {
     let distances = [];
 
     for (let i = 0; i < rayCount; i++) {
-      distances.push(this.drawRay(rayAngle, draw));
+      const ed = this.drawRay(rayAngle, draw); // euclidean distance, will give fisheye effect
+      const a = rayAngle - this.heading;
+      distances.push([ed[0] * cos(a), ed[1]]); // projection distance. Should render without fisheye.
       rayAngle = this.normalizeAngle(rayAngle + raySpacing);
     }
-    print(distances);
+    return distances;
   }
 
   draw2d () {
@@ -285,19 +258,31 @@ class MapTracer {
   }
 
   draw () {
-    let dists = this.findHeights();
-    let w = width / this.rayCount;
-    translate(0, height / 2);
+    let fov = 2;
+    let rayCount = 111;
+    let dists = this.drawRays(fov, rayCount);
+    let w = width / rayCount;
+    push();
+    translate(0, 480);
+    translate(0, 480 / 2);
+    noStroke();
     for (let i = 0; i < dists.length; i++) {
-      let height = map(dists[i], 0, 5, 300, 0);
-      line(w * i, -height, w * (i + 1), -height);
-      line(w * i, height, w * (i + 1), height);
-
-      // if (i > 0) {
-      //   line(w * i, dists[i] * -100, w * i, dists[i - 1] * -100);
-      //   line(w * i, dists[i] * 100, w * i, dists[i - 1] * 100);
-      // }
+      let h = map(dists[i][0], 0, 110, 300, 0);
+      // rectangle rendering
+      if (dists[i][1]) {
+        fill('firebrick');
+      } else {
+        fill('red');
+      }
+      rect(w * i, -h, w, h * 2);
+      
+      // line(w * i, -h, w * (i + 1), -h);
+      // line(w * i, h, w * (i + 1), h);
+      // // vertical connectors
+      // line(w * i, -h, w * i, h);
+      // line(w * (i + 1), -h, w * (i + 1), h);
     }
+    pop();
   }
 }
 
