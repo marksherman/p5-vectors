@@ -18,10 +18,11 @@ function setup () {
 }
 
 function draw () {
-  frame = floor(millis() / 50);
+  frame = millis();
   background(0);
   mapTracer.draw2d();
-  mapTracer.drawRays();
+  // mapTracer.drawRay(mapTracer.heading);
+  mapTracer.drawRays(2, 30);
 }
 
 class MapTracer {
@@ -55,18 +56,22 @@ class MapTracer {
     if (direction === 'right') {
       this.heading += QUARTER_PI / 2;
     }
-    this.heading %= TWO_PI;
-    if (this.heading < 0) {
-      this.heading = TWO_PI - abs(this.heading);
-    }
+    this.heading = this.normalizeAngle(this.heading);
     print('position:', this.posX, this.posY, this.heading);
   }
 
-  move () {
-    let tox = round(1.1 * cos(this.heading));
-    let toy = round(1.1 * sin(this.heading));
-    print('cos', cos(this.heading), 'sin', sin(this.heading));
-    print('moving by', tox, toy, this.heading);
+  // Convert angle to equivalent value within [0, TWO_PI]
+  normalizeAngle (a) {
+    let b = a % TWO_PI;
+    if (b < 0) {
+      b = TWO_PI - abs(b);
+    }
+    return b;
+  }
+
+  move (speed = 1) {
+    let tox = speed * cos(this.heading);
+    let toy = speed * sin(this.heading);
     if (this.posX + tox > 0 && this.posY > 0 && this.posX < 100 && this.posY < 100) {
       this.posX += tox;
       this.posY += toy;
@@ -121,20 +126,32 @@ class MapTracer {
     return dists;
   }
 
-  drawRays () {
-    push();
-    noFill();
-    stroke(globalColor);
-    strokeWeight(0.5);
-    stroke('green');
-    translate(1, 1);
-    scale(4);
+  drawRay (rayAngle, draw = true) {
+    if (draw) {
+      push();
+      noFill();
+      stroke(globalColor);
+      strokeWeight(0.5);
+      stroke('green');
+      translate(1, 1);
+      scale(4);
+    }
 
-    let rayAngle = this.heading;
+    // let rayAngle = this.heading;
     let rayY;
     let rayX;
     let offX; // offsets to go multiple grid squares quickly
     let offY;
+
+    // Where the final results will be stored
+    let hRayD = Infinity;
+    let hRayX = this.posX;
+    let hRayY = this.posY;
+    let vRayD = Infinity;
+    let vRayX = this.posX;
+    let vRayY = this.posY;
+    let distance = Infinity;
+
     // **********************************************************
     // * find horizontal line intercept                         *
     // **********************************************************
@@ -155,14 +172,6 @@ class MapTracer {
       offY = this.gridSize;
       offX = -offY * arcTan;
     }
-    // looking left or right won't ever hit a horizontal line
-    // if ((rayAngle < 0.0000000000001 && rayAngle > -0.0000000000001) ||
-    //     (rayAngle < PI + 0.0000000000001 && rayAngle > PI - 0.0000000000001) ||
-    //     (rayAngle < TWO_PI + 0.0000000000001 && rayAngle > TWO_PI - 0.0000000000001)) {
-    //   rayX = this.posX;
-    //   rayY = this.posY;
-    //   depth = 10; // don't do the loop
-    // }
     // now we loop to find the nearest wall, one offset click at a time
     while (depth < 8) {
       const gridX = floor(rayX / this.gridSize);
@@ -170,6 +179,10 @@ class MapTracer {
       // if our coordinates are on the map, check the map and end the loop if wall found
       if (gridX < 10 && gridY < 10 && gridX >= 0 && gridY >= 0 && 
           this.map[gridY][gridX] === 1) {
+        // if (rayY < this.posY) { rayY += this.gridSize; }
+        hRayX = rayX;
+        hRayY = rayY;
+        hRayD = dist(hRayX, hRayY, this.posX, this.posY);
         depth = 10; // hit a wall; stop
       } else {
         rayX += offX;
@@ -177,9 +190,6 @@ class MapTracer {
         depth += 1;
       }
     }
-    if (rayY < this.posY) { rayY += this.gridSize; }
-    strokeWeight(4);
-    line(this.posX, this.posY, rayX, rayY);
 
     // **********************************************************
     // * find vertical line intercept                         *
@@ -200,13 +210,6 @@ class MapTracer {
       offX = this.gridSize;
       offY = -offX * nTan;
     }
-    // looking up or down won't ever hit a horizontal line
-    // if ((rayAngle < TWO_PI + 0.0000000000001 && rayAngle > TWO_PI - 0.0000000000001) ||
-    //     (rayAngle < 3 * TWO_PI + 0.0000000000001 && rayAngle > 3 * TWO_PI - 0.0000000000001)) {
-    //   rayX = this.posX;
-    //   rayY = this.posY;
-    //   depth = 10; // don't do the loop
-    // }
     // now we loop to find the nearest wall, one offset click at a time
     while (depth < 8) {
       const gridX = floor(rayX / this.gridSize);
@@ -214,6 +217,10 @@ class MapTracer {
       // if our coordinates are on the map, check the map and end the loop if wall found
       if (gridX < 10 && gridY < 10 && gridX >= 0 && gridY >= 0 && 
           this.map[gridY][gridX] === 1) {
+        // if (rayX < this.posX) { rayX += this.gridSize; }
+        vRayX = rayX;
+        vRayY = rayY;
+        vRayD = dist(vRayX, vRayY, this.posX, this.posY);
         depth = 10; // hit a wall; stop
       } else {
         rayX += offX;
@@ -221,11 +228,34 @@ class MapTracer {
         depth += 1;
       }
     }
-    if (rayX < this.posX) { rayX += this.gridSize; }
-    strokeWeight(0.5);
-    stroke('purple');
-    line(this.posX, this.posY, rayX, rayY);
-    pop();
+
+    // Which one is shorter?
+    if (vRayD < hRayD) {
+      rayX = vRayX;
+      rayY = vRayY;
+      distance = vRayD;
+    } else {
+      rayX = hRayX;
+      rayY = hRayY;
+      distance = hRayD;
+    }
+    if (draw) {
+      line(this.posX, this.posY, rayX, rayY);
+      pop();
+    }
+    return distance;
+  }
+
+  drawRays (fov, rayCount, draw = true) {
+    let rayAngle = this.normalizeAngle(this.heading - fov / 2);
+    let raySpacing = fov / (rayCount - 1);
+    let distances = [];
+
+    for (let i = 0; i < rayCount; i++) {
+      distances.push(this.drawRay(rayAngle, draw));
+      rayAngle = this.normalizeAngle(rayAngle + raySpacing);
+    }
+    print(distances);
   }
 
   draw2d () {
@@ -249,6 +279,7 @@ class MapTracer {
     let headingLine = createVector(10, 0);
     headingLine.setHeading(this.heading);
     stroke('red');
+    strokeWeight(2);
     line(this.posX, this.posY, this.posX + headingLine.x, this.posY + headingLine.y);
     pop();
   }
@@ -279,5 +310,8 @@ function keyPressed () {
   }
   if (keyCode === UP_ARROW) {
     mapTracer.move();
+  }
+  if (keyCode === DOWN_ARROW) {
+    mapTracer.move(-1);
   }
 }
