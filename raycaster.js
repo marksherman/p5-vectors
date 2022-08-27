@@ -3,39 +3,42 @@
  */
 
 let imageWidth = 640;
-let imageHeight = 480 * 2;
+let imageHeight = 480;
 let globalColor = 255;
 let frame = 0;
 let mapTracer;
 
 function setup () {
-  createCanvas(imageWidth, imageHeight);
+  createCanvas(imageWidth, imageHeight * 2);
   globalColor = color(255, 255);
   mapTracer = new MapTracer();
   stroke(globalColor);
   background(0);
-  // noLoop();
+  noLoop();
 }
 
 function draw () {
   frame = millis();
   background(0);
-  mapTracer.draw();
+  // mapTracer.drawVertex(mapTracer.walls[4].a);
+  // mapTracer.drawWall(mapTracer.walls[0]);
+  // mapTracer.draw();
   mapTracer.draw2d();
-  // mapTracer.drawRay(mapTracer.dir, mapTracer.walls[1]);
-  // mapTracer.drawRays(1, 30);
+  // mapTracer.drawRay(mapTracer.dir);
+  mapTracer.drawRays();
 }
 
 class Wall {
-  constructor (x1, y1, x2, y2) {
+  constructor (id, x1, y1, x2, y2) {
+    this.id = id;
     this.a = createVector(x1, y1);
     this.b = createVector(x2, y2);
   }
 }
 class MapTracer {
   constructor () {
-    this.fov = 1;
-    this.rayCount = 111;
+    this.fov = 2;
+    this.rayCount = 30;
     // map as drawn is [row][col] which means [y][x]
     this.map = [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -53,33 +56,33 @@ class MapTracer {
     this.mapHeight = 100;
 
     this.walls = [
-      new Wall(0, 0, this.mapWidth, 0),
-      new Wall(this.mapWidth, 0, this.mapWidth, this.mapHeight),
-      new Wall(this.mapWidth, this.mapHeight, 0, this.mapHeight),
-      new Wall(0, this.mapHeight, 0, 0),
+      new Wall(0, 0, 0, this.mapWidth, 0),
+      new Wall(1, this.mapWidth, 0, this.mapWidth, this.mapHeight),
+      // new Wall(2, this.mapWidth, this.mapHeight, 0, this.mapHeight),
+      new Wall(3, 0, this.mapHeight, 0, 0),
       // bottom-right wedge
-      new Wall(this.mapWidth, 0.8 * this.mapHeight, 0.8 * this.mapWidth, this.mapHeight),
+      new Wall(4, this.mapWidth, 0.8 * this.mapHeight, 0.8 * this.mapWidth, this.mapHeight),
       // top-left thrust
-      new Wall(0, 0.3 * this.mapHeight, 0.2 * this.mapWidth, 0.3 * this.mapHeight),
-      new Wall(0.2 * this.mapWidth, 0.3 * this.mapHeight, 0.2 * this.mapWidth, 0.2 * this.mapHeight),
-      new Wall(0.2 * this.mapWidth, 0.2 * this.mapHeight, 0, 0.2 * this.mapHeight)
+      new Wall(5, 0, 0.3 * this.mapHeight, 0.2 * this.mapWidth, 0.3 * this.mapHeight),
+      new Wall(6, 0.2 * this.mapWidth, 0.3 * this.mapHeight, 0.2 * this.mapWidth, 0.2 * this.mapHeight),
+      new Wall(7, 0.2 * this.mapWidth, 0.2 * this.mapHeight, 0, 0.2 * this.mapHeight)
     ];
     this.gridSize = 10;
     this.pos = createVector();
     this.pos.x = 40;
     this.pos.y = 40;
     this.dir = createVector(1, 0); // use this.dir.heading() to get heading
-    // print('position:', this.pos.x, this.pos.y, this.dir.heading());
   }
 
   turn (direction) {
     if (direction === 'left') {
-      this.dir.rotate(-QUARTER_PI / 2);
+      this.dir.rotate(-QUARTER_PI / 4);
     }
     if (direction === 'right') {
-      this.dir.rotate(QUARTER_PI / 2);
+      this.dir.rotate(QUARTER_PI / 4);
     }
     // print('position:', this.pos.x, this.pos.y, this.dir.heading());
+    redraw();
   }
 
   move (speed = 1) {
@@ -92,111 +95,147 @@ class MapTracer {
       print('out of bounds');
     }
     // print('position:', this.pos.x, this.pos.y, this.dir.heading());
+    redraw();
   }
 
-  drawRay (rayAngle, wall, draw = true) {
-    if (draw) {
-      push();
-      noFill();
-      stroke(globalColor);
-      strokeWeight(0.5);
-      translate(1, 1);
-      scale(4);
+  drawVertex (v) {
+    push();
+    // translate(0, 480);
+    // translate(imageWidth / 2, 480 / 2);
+    translate(1, 1);
+    scale(4);
+
+    const c = this.pos; // "camera," our position
+    const h = this.dir;
+    const fovLim = this.fov / 2;
+    const t0 = p5.Vector.fromAngle(atan((v.y - c.y) / (v.x - c.x))); // theta_origin: angle to vertex from pos based on origin plane (heading 0)
+    let tA; // theta_apparent: angle betweeen heading and vertex
+    tA = h.angleBetween(t0);
+
+    const leftLim = h.copy().rotate(-fovLim).heading();
+    const rightLim = h.copy().rotate(fovLim).heading();
+
+    // print('θ_0', t0.heading(), 'θ_A', tA,
+    //   `${t0.heading() < leftLim ? '<' : ''}[${leftLim}..${h.heading()}..${rightLim}]${t0.heading() > rightLim ? '>' : ''}`);
+    // if (t0.heading() < leftLim || t0.heading() > rightLim) {
+    //   // vertex is outside our FoV, do not draw
+    //   pop();
+    //   return;
+    // }
+
+    stroke('blue');
+    line(v.x, v.y, c.x, c.y);
+
+    scale(1 / 4);
+    translate(-1, 480 - 1);
+    translate(imageWidth / 2, 480 / 2);
+    const di = sqrt((v.x - c.x) ** 2 + (v.y - c.y) ** 2); // distance to intersection of heading and origin plain of the vertex
+    const w = di * tan(tA); // width: horiz dist of vertex from center of screen; percieved dist from heading
+    const d = v.dist(c);
+    const dh = map(d, 0, 140, imageHeight / 2, 5); // distance->draw height
+    const scaledw = map(w, -110, 110, -imageWidth / 2, imageWidth / 2);
+    fill('blue');
+    stroke(globalColor);
+    line(scaledw, -dh, scaledw, dh);
+    ellipse(scaledw, -dh, 5);
+    ellipse(scaledw, dh, 5);
+    pop();
+    return [scaledw, -dh, scaledw, dh];
+  }
+
+  drawWall (wallId) {
+    if (wallId === undefined) {
+      return;
     }
+    const wall = this.walls.find((el) => el.id === wallId);
+    const a = this.drawVertex(wall.a);
+    const b = this.drawVertex(wall.b);
 
-    // this is some wild shit based on https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
-    const x1 = wall.a.x;
-    const y1 = wall.a.y;
-    const x2 = wall.b.x;
-    const y2 = wall.b.y;
+    push();
+    translate(0, 480);
+    translate(640 / 2, 480 / 2);
+    line(a[0], a[1], b[0], b[1]);
+    line(a[2], a[3], b[2], b[3]);
+    pop();
+  }
 
-    const x3 = this.pos.x;
-    const y3 = this.pos.y;
-    const x4 = this.pos.x + rayAngle.x;
-    const y4 = this.pos.y + rayAngle.y;
+  drawRay (rayAngle) {
+    push();
+    noFill();
+    stroke(globalColor);
+    strokeWeight(0.5);
+    translate(1, 1);
+    scale(4);
 
-    let intersection;
+    let minDistance = Infinity; // closest thing found on this particular ray
+    let closestIntersection;
+    let closestWallId;
 
-    const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (denominator === 0) {
-      return; // lines never intersect. Nothing else to do!
-    }
+    for (const wall of this.walls) {
+      // this is some wild shit based on https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+      const x1 = wall.a.x;
+      const y1 = wall.a.y;
+      const x2 = wall.b.x;
+      const y2 = wall.b.y;
 
-    // t is the intersection within the wall segment. 0<=t<=1 means ray intersects it
-    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator;
-    // u is the intersection with the ray. 0<=u means the wall intersects this ray
-    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator;
+      const x3 = this.pos.x;
+      const y3 = this.pos.y;
+      const x4 = this.pos.x + rayAngle.x;
+      const y4 = this.pos.y + rayAngle.y;
 
-    if (t >= 0 && t <= 1 && u >= 0) {
-      intersection = createVector(x1 + t * (x2 - x1), y1 + t * (y2 - y1));
-    }
-    if (draw) {
-      if (intersection) {
-        stroke('green');
-        line(this.pos.x, this.pos.y, intersection.x, intersection.y);
-      } else {
-        const fakeEnd = rayAngle.copy();
-        fakeEnd.setMag(100);
-        fakeEnd.add(this.pos);
-        stroke('red');
-        line(this.pos.x, this.pos.y, fakeEnd.x, fakeEnd.y);
+      let intersection;
+
+      const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+      if (denominator !== 0) { // if 0, lines never intersect. nothing else to do.
+        // t is the intersection within the wall segment. 0<=t<=1 means ray intersects it
+        const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator;
+        // u is the intersection with the ray. 0<=u means the wall intersects this ray
+        const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator;
+
+        if (t >= 0 && t <= 1 && u >= 0) {
+          intersection = createVector(x1 + t * (x2 - x1), y1 + t * (y2 - y1));
+        }
+
+        if (intersection && intersection.dist(this.pos) < minDistance) {
+          closestIntersection = intersection;
+          minDistance = intersection.dist(this.pos);
+          closestWallId = wall.id;
+        }
       }
-      pop();
     }
-    return intersection;
+
+    if (closestIntersection) {
+      stroke(80, 255, 81, 100);
+      line(this.pos.x, this.pos.y, closestIntersection.x, closestIntersection.y);
+    } else {
+      const fakeEnd = rayAngle.copy();
+      fakeEnd.setMag(100);
+      fakeEnd.add(this.pos);
+      stroke('red');
+      line(this.pos.x, this.pos.y, fakeEnd.x, fakeEnd.y);
+    }
+    pop();
+    return closestWallId;
   }
 
-  drawRays (draw = true) {
-    if (draw) {
-      push();
-      noFill();
-      stroke(globalColor);
-      strokeWeight(0.5);
-      translate(1, 1);
-      scale(4);
-    }
-
-    let rayAngle = this.dir.copy().rotate(-this.fov / 2);
+  drawRays () {
+    const fovLim = this.fov / 2;
+    let rayAngle = this.dir.copy().rotate(-fovLim);
     let raySpacing = this.fov / (this.rayCount - 1);
-    let distances = [];
+    let wallsHit = [];
 
     for (let i = 0; i < this.rayCount; i++) {
-      let intersect;
-      let distance = Infinity;
       // need to find the closest intersect after checking all of the walls
-      for (const wall of this.walls) {
-        const inter = this.drawRay(rayAngle, wall, false);
-        if (inter) {
-          const d = inter.dist(this.pos);
-          if (d < distance) {
-            intersect = inter;
-            distance = d;
-          }
-        }
-      }
-      if (intersect) {
-        const a = rayAngle.angleBetween(this.dir);
-        distances.push(distance * cos(a)); // projection distance. Should render without fisheye.
-        if (draw) {
-          stroke(80, 255, 81, 100);
-          line(this.pos.x, this.pos.y, intersect.x, intersect.y);
-        }
-      } else {
-        distances.push(false);
-        if (draw) {
-          const fakeEnd = rayAngle.copy();
-          fakeEnd.setMag(100);
-          fakeEnd.add(this.pos);
-          stroke('red');
-          line(this.pos.x, this.pos.y, fakeEnd.x, fakeEnd.y);
-        }
+      const wallId = this.drawRay(rayAngle, true);
+      if (!wallsHit.find((el) => el === wallId)) {
+        wallsHit.push(wallId);
       }
       rayAngle.rotate(raySpacing);
     }
-    if (draw) {
-      pop();
+
+    for (const wallId of wallsHit) {
+      this.drawWall(wallId);
     }
-    return distances;
   }
 
   draw2d () {
@@ -233,7 +272,6 @@ class MapTracer {
       let fillDistance = map(dists[i], 0, 110, 0, 1);
       fillDistance = (-log(fillDistance + 1)) + 1;
       fillDistance = fillDistance * 255;
-      // print(fillDistance);
       fill(fillDistance);
       rect(w * i, -h, w, h * 2);
     }
