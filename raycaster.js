@@ -22,13 +22,20 @@ function draw () {
   background(0);
   mapTracer.draw();
   mapTracer.draw2d();
-  // mapTracer.drawRay(mapTracer.heading);
-  // mapTracer.drawRays(2, 30);
+  // mapTracer.drawRay(mapTracer.dir, mapTracer.walls[1]);
+  // mapTracer.drawRays(1, 30);
 }
 
+class Wall {
+  constructor (x1, y1, x2, y2) {
+    this.a = createVector(x1, y1);
+    this.b = createVector(x2, y2);
+  }
+}
 class MapTracer {
   constructor () {
-    this.rayCount = 10;
+    this.fov = 1;
+    this.rayCount = 111;
     // map as drawn is [row][col] which means [y][x]
     this.map = [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -41,192 +48,153 @@ class MapTracer {
       [1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
       [1, 0, 0, 0, 0, 0, 1, 0, 0, 1],
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]];
+
     this.mapWidth = 100;
     this.mapHeight = 100;
+
+    this.walls = [
+      new Wall(0, 0, this.mapWidth, 0),
+      new Wall(this.mapWidth, 0, this.mapWidth, this.mapHeight),
+      new Wall(this.mapWidth, this.mapHeight, 0, this.mapHeight),
+      new Wall(0, this.mapHeight, 0, 0),
+      // bottom-right wedge
+      new Wall(this.mapWidth, 0.8 * this.mapHeight, 0.8 * this.mapWidth, this.mapHeight),
+      // top-left thrust
+      new Wall(0, 0.3 * this.mapHeight, 0.2 * this.mapWidth, 0.3 * this.mapHeight),
+      new Wall(0.2 * this.mapWidth, 0.3 * this.mapHeight, 0.2 * this.mapWidth, 0.2 * this.mapHeight),
+      new Wall(0.2 * this.mapWidth, 0.2 * this.mapHeight, 0, 0.2 * this.mapHeight)
+    ];
     this.gridSize = 10;
-    this.posX = 40;
-    this.posY = 40;
-    this.heading = 0;
-    print('position:', this.posX, this.posY, this.heading);
+    this.pos = createVector();
+    this.pos.x = 40;
+    this.pos.y = 40;
+    this.dir = createVector(1, 0); // use this.dir.heading() to get heading
+    // print('position:', this.pos.x, this.pos.y, this.dir.heading());
   }
 
   turn (direction) {
     if (direction === 'left') {
-      this.heading -= QUARTER_PI / 2;
+      this.dir.rotate(-QUARTER_PI / 2);
     }
     if (direction === 'right') {
-      this.heading += QUARTER_PI / 2;
+      this.dir.rotate(QUARTER_PI / 2);
     }
-    this.heading = this.normalizeAngle(this.heading);
-    print('position:', this.posX, this.posY, this.heading);
-  }
-
-  // Convert angle to equivalent value within [0, TWO_PI]
-  normalizeAngle (a) {
-    let b = a % TWO_PI;
-    if (b < 0) {
-      b = TWO_PI - abs(b);
-    }
-    return b;
+    // print('position:', this.pos.x, this.pos.y, this.dir.heading());
   }
 
   move (speed = 1) {
-    let tox = speed * cos(this.heading);
-    let toy = speed * sin(this.heading);
-    if (this.posX + tox > 0 && this.posY > 0 && this.posX < 100 && this.posY < 100) {
-      this.posX += tox;
-      this.posY += toy;
+    let tox = speed * cos(this.dir.heading());
+    let toy = speed * sin(this.dir.heading());
+    if (this.pos.x + tox > 0 && this.pos.y > 0 && this.pos.x < 100 && this.pos.y < 100) {
+      this.pos.x += tox;
+      this.pos.y += toy;
     } else {
       print('out of bounds');
     }
-    print('position:', this.posX, this.posY, this.heading);
-    // redraw();
+    // print('position:', this.pos.x, this.pos.y, this.dir.heading());
   }
 
-  printMap () {
-    for (let row = 0; row < 10; row++) {
-      let rp = '';
-      for (let col = 0; col < 10; col++) {
-        if (row === this.posY && col === this.posX) {
-          rp = rp + 'X ';
-        } else {
-          rp = rp + str(this.map[row][col]) + ' ';
-        }
-      }
-      print(rp);
-    }
-  }
-
-  drawRay (rayAngle, draw = true) {
+  drawRay (rayAngle, wall, draw = true) {
     if (draw) {
       push();
       noFill();
       stroke(globalColor);
       strokeWeight(0.5);
-      stroke('green');
       translate(1, 1);
       scale(4);
     }
 
-    // let rayAngle = this.heading;
-    let rayY;
-    let rayX;
-    let offX; // offsets to go multiple grid squares quickly
-    let offY;
+    // this is some wild shit based on https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+    const x1 = wall.a.x;
+    const y1 = wall.a.y;
+    const x2 = wall.b.x;
+    const y2 = wall.b.y;
 
-    // Where the final results will be stored
-    let hRayD = Infinity;
-    let hRayX = this.posX;
-    let hRayY = this.posY;
-    let vRayD = Infinity;
-    let vRayX = this.posX;
-    let vRayY = this.posY;
-    let distance = Infinity;
+    const x3 = this.pos.x;
+    const y3 = this.pos.y;
+    const x4 = this.pos.x + rayAngle.x;
+    const y4 = this.pos.y + rayAngle.y;
 
-    // **********************************************************
-    // * find horizontal line intercept                         *
-    // **********************************************************
-    let arcTan = -1 / tan(rayAngle);
-    let depth = 0; // when this hits 10 the loop below stops. Prevents infinite loop.
-    // looking up
-    // TODO there's a bug in here when the player is sitting exactly on a horizontal line
-    if (rayAngle > PI) {
-      rayY = floor(this.posY / this.gridSize) * this.gridSize;
-      rayX = (this.posY - rayY) * arcTan + this.posX;
-      offY = -this.gridSize;
-      offX = -offY * arcTan;
-    }
-    // looking down
-    if (rayAngle < PI) {
-      rayY = floor(this.posY / this.gridSize) * this.gridSize + this.gridSize;
-      rayX = (this.posY - rayY) * arcTan + this.posX;
-      offY = this.gridSize;
-      offX = -offY * arcTan;
-    }
-    // now we loop to find the nearest wall, one offset click at a time
-    while (depth < 8) {
-      const gridX = floor(rayX / this.gridSize);
-      const gridY = floor(rayY / this.gridSize);
-      // if our coordinates are on the map, check the map and end the loop if wall found
-      if (gridX < 10 && gridY < 10 && gridX >= 0 && gridY >= 0 && 
-          this.map[gridY][gridX] === 1) {
-        // if (rayY < this.posY) { rayY += this.gridSize; }
-        hRayX = rayX;
-        hRayY = rayY;
-        hRayD = dist(hRayX, hRayY, this.posX, this.posY);
-        depth = 10; // hit a wall; stop
-      } else {
-        rayX += offX;
-        rayY += offY;
-        depth += 1;
-      }
+    let intersection;
+
+    const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (denominator === 0) {
+      return; // lines never intersect. Nothing else to do!
     }
 
-    // **********************************************************
-    // * find vertical line intercept                         *
-    // **********************************************************
-    let nTan = -1 * tan(rayAngle);
-    depth = 0; // when this hits 10 the loop below stops. Prevents infinite loop.
-    // looking left
-    if (rayAngle > HALF_PI && rayAngle < 3 * HALF_PI) {
-      rayX = floor(this.posX / this.gridSize) * this.gridSize;
-      rayY = (this.posX - rayX) * nTan + this.posY;
-      offX = -this.gridSize;
-      offY = -offX * nTan;
-    }
-    // looking right
-    if (rayAngle < HALF_PI || rayAngle > 3 * HALF_PI) {
-      rayX = floor(this.posX / this.gridSize) * this.gridSize + this.gridSize;
-      rayY = (this.posX - rayX) * nTan + this.posY;
-      offX = this.gridSize;
-      offY = -offX * nTan;
-    }
-    // now we loop to find the nearest wall, one offset click at a time
-    while (depth < 8) {
-      const gridX = floor(rayX / this.gridSize);
-      const gridY = floor(rayY / this.gridSize);
-      // if our coordinates are on the map, check the map and end the loop if wall found
-      if (gridX < 10 && gridY < 10 && gridX >= 0 && gridY >= 0 && 
-          this.map[gridY][gridX] === 1) {
-        // if (rayX < this.posX) { rayX += this.gridSize; }
-        vRayX = rayX;
-        vRayY = rayY;
-        vRayD = dist(vRayX, vRayY, this.posX, this.posY);
-        depth = 10; // hit a wall; stop
-      } else {
-        rayX += offX;
-        rayY += offY;
-        depth += 1;
-      }
-    }
+    // t is the intersection within the wall segment. 0<=t<=1 means ray intersects it
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator;
+    // u is the intersection with the ray. 0<=u means the wall intersects this ray
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator;
 
-    // Which one is shorter?
-    if (vRayD < hRayD) {
-      rayX = vRayX;
-      rayY = vRayY;
-      distance = [vRayD, 0];
-    } else {
-      rayX = hRayX;
-      rayY = hRayY;
-      distance = [hRayD, 1];
+    if (t >= 0 && t <= 1 && u >= 0) {
+      intersection = createVector(x1 + t * (x2 - x1), y1 + t * (y2 - y1));
     }
     if (draw) {
-      line(this.posX, this.posY, rayX, rayY);
+      if (intersection) {
+        stroke('green');
+        line(this.pos.x, this.pos.y, intersection.x, intersection.y);
+      } else {
+        const fakeEnd = rayAngle.copy();
+        fakeEnd.setMag(100);
+        fakeEnd.add(this.pos);
+        stroke('red');
+        line(this.pos.x, this.pos.y, fakeEnd.x, fakeEnd.y);
+      }
       pop();
     }
-    return distance;
+    return intersection;
   }
 
-  drawRays (fov, rayCount, draw = true) {
-    let rayAngle = this.normalizeAngle(this.heading - fov / 2);
-    let raySpacing = fov / (rayCount - 1);
+  drawRays (draw = true) {
+    if (draw) {
+      push();
+      noFill();
+      stroke(globalColor);
+      strokeWeight(0.5);
+      translate(1, 1);
+      scale(4);
+    }
+
+    let rayAngle = this.dir.copy().rotate(-this.fov / 2);
+    let raySpacing = this.fov / (this.rayCount - 1);
     let distances = [];
 
-    for (let i = 0; i < rayCount; i++) {
-      const ed = this.drawRay(rayAngle, draw); // euclidean distance, will give fisheye effect
-      const a = rayAngle - this.heading;
-      distances.push([ed[0] * cos(a), ed[1]]); // projection distance. Should render without fisheye.
-      rayAngle = this.normalizeAngle(rayAngle + raySpacing);
+    for (let i = 0; i < this.rayCount; i++) {
+      let intersect;
+      let distance = Infinity;
+      // need to find the closest intersect after checking all of the walls
+      for (const wall of this.walls) {
+        const inter = this.drawRay(rayAngle, wall, false);
+        if (inter) {
+          const d = inter.dist(this.pos);
+          if (d < distance) {
+            intersect = inter;
+            distance = d;
+          }
+        }
+      }
+      if (intersect) {
+        const a = rayAngle.angleBetween(this.dir);
+        distances.push(distance * cos(a)); // projection distance. Should render without fisheye.
+        if (draw) {
+          stroke(80, 255, 81, 100);
+          line(this.pos.x, this.pos.y, intersect.x, intersect.y);
+        }
+      } else {
+        distances.push(false);
+        if (draw) {
+          const fakeEnd = rayAngle.copy();
+          fakeEnd.setMag(100);
+          fakeEnd.add(this.pos);
+          stroke('red');
+          line(this.pos.x, this.pos.y, fakeEnd.x, fakeEnd.y);
+        }
+      }
+      rayAngle.rotate(raySpacing);
+    }
+    if (draw) {
+      pop();
     }
     return distances;
   }
@@ -238,49 +206,36 @@ class MapTracer {
     strokeWeight(0.5);
     translate(1, 1);
     scale(4);
-    let s = this.gridSize;
-    for (let row = 0; row < 10; row++) {
-      for (let col = 0; col < 10; col++) {
-        if (this.map[row][col] === 1) { fill(200); }
-        else { noFill(); }
-        rect(col * s, row * s, s);
-      }
+    for (const wall of this.walls) {
+      line(wall.a.x, wall.a.y, wall.b.x, wall.b.y);
     }
     fill('yellow');
     noStroke();
-    rect(this.posX - 2, this.posY - 2, 4);
+    rect(this.pos.x - 2, this.pos.y - 2, 4);
     let headingLine = createVector(10, 0);
-    headingLine.setHeading(this.heading);
+    headingLine.setHeading(this.dir.heading());
     stroke('red');
     strokeWeight(2);
-    line(this.posX, this.posY, this.posX + headingLine.x, this.posY + headingLine.y);
+    line(this.pos.x, this.pos.y, this.pos.x + headingLine.x, this.pos.y + headingLine.y);
     pop();
   }
 
   draw () {
-    let fov = 2;
-    let rayCount = 111;
-    let dists = this.drawRays(fov, rayCount);
-    let w = width / rayCount;
+    let dists = this.drawRays(this.fov, this.rayCount);
+    let w = width / this.rayCount;
     push();
     translate(0, 480);
     translate(0, 480 / 2);
     noStroke();
     for (let i = 0; i < dists.length; i++) {
-      let h = map(dists[i][0], 0, 110, 300, 0);
+      let h = map(dists[i], 0, 110, 300, 0);
       // rectangle rendering
-      if (dists[i][1]) {
-        fill('firebrick');
-      } else {
-        fill('red');
-      }
+      let fillDistance = map(dists[i], 0, 110, 0, 1);
+      fillDistance = (-log(fillDistance + 1)) + 1;
+      fillDistance = fillDistance * 255;
+      // print(fillDistance);
+      fill(fillDistance);
       rect(w * i, -h, w, h * 2);
-      
-      // line(w * i, -h, w * (i + 1), -h);
-      // line(w * i, h, w * (i + 1), h);
-      // // vertical connectors
-      // line(w * i, -h, w * i, h);
-      // line(w * (i + 1), -h, w * (i + 1), h);
     }
     pop();
   }
