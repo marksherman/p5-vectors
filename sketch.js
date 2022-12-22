@@ -169,10 +169,13 @@ class Lasers {
     this.beamLength.setHeading(this.target.heading());
   }
 
-  shoot () {
+  shoot (x, y) {
     if (this.isShooting === false) {
       this.isShooting = true;
       this.progress = 0;
+      if (x !== undefined && y !== undefined) {
+        this.target = createVector(x, y);
+      }
     }
   }
 
@@ -208,5 +211,5 @@ function mouseWheel (event) {
 
 // used to fire lasers
 function mousePressed (event) {
-  lasers.shoot();
+  lasers.shoot(mouseX, mouseY);
 }
