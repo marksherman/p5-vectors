@@ -9,7 +9,7 @@
 			"extensions": [
 				"dbaeumer.vscode-eslint",
 				"acidic9.p5js-snippets",
-				"yandeu.five-server"
+				"ms-vscode.live-server"
 			]
 		}
 	}
