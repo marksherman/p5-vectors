@@ -8,7 +8,7 @@
         "p5js/p5": true
     },
     "extends": [
-        "semistandard",
+        "eslint:recommended",
         "plugin:p5js/p5"
     ],
     "rules": {
