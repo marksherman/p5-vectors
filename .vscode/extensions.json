@@ -1,5 +1,7 @@
 {
     "recommendations": [
-        "ms-vscode-remote.remote-containers"
+        "ms-vscode-remote.remote-containers",
+        "acidic9.p5js-snippets",
+        "yandeu.five-server"
     ]
 }
